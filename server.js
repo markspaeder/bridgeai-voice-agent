@@ -133,6 +133,9 @@ app.post('/respond/:client', async (req, res) => {
   let reply = '';
 
   try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 4000);
+    
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
@@ -142,11 +145,13 @@ app.post('/respond/:client', async (req, res) => {
       },
       body: JSON.stringify({
         model: 'claude-haiku-4-5-20251001',
-        max_tokens: 200,
+        max_tokens: 150,
         system: config.prompt,
         messages: conv.history
-      })
+      }),
+      signal: controller.signal
     });
+    clearTimeout(timeout);
 
     const data = await response.json();
     reply = data.content?.[0]?.text || "I'm sorry, could you repeat that?";
@@ -249,6 +254,53 @@ async function sendLeadEmail(lead) {
           <p><b>Phone:</b> <a href="tel:${lead.phone}">${lead.phone}</a></p>
           <p><b>Issue:</b> ${lead.project}</p>
           <p><b>Time:</b> ${lead.timestamp}</p>
+          <p><b>Source:</b> Phone Call (AI Receptionist)</p>
+          <hr/>
+          <pre style="font-size:12px;white-space:pre-wrap;background:#fff;padding:12px;border:1px solid #ddd;">${lead.snippet}</pre>
+        </div>
+        <div style="background:#122949;padding:10px;text-align:center;border-radius:0 0 8px 8px;">
+          <p style="color:#6B8FFF;font-size:11px;margin:0;">Powered by Bridge AI Voice — mybridgeai.com</p>
+        </div>
+      </div>`
+    })
+  });
+
+  if (!r.ok) {
+    const err = await r.json();
+    throw new Error(JSON.stringify(err));
+  }
+  console.log('📧 Email sent to:', toEmail);
+}
+
+// ── Google Sheets ──────────────────────────────────────
+async function appendSheet(lead) {
+  const { google } = require('googleapis');
+  const creds = JSON.parse((process.env.GOOGLE_SERVICE_ACCOUNT || '{}').trim());
+  const sheetId = (process.env.BRIDGEAI_SHEET_ID || '').trim();
+  if (!sheetId) return;
+
+  const auth = new google.auth.GoogleAuth({
+    credentials: creds,
+    scopes: ['https://www.googleapis.com/auth/spreadsheets']
+  });
+  const sheets = google.sheets({ version: 'v4', auth });
+  await sheets.spreadsheets.values.append({
+    spreadsheetId: sheetId,
+    range: 'Sheet1!A:G',
+    valueInputOption: 'RAW',
+    requestBody: {
+      values: [[lead.timestamp, lead.name, lead.phone, lead.project, lead.client, 'Phone Call', 'New']]
+    }
+  });
+  console.log('📊 Sheet updated:', lead.client);
+}
+
+// ── Health check ───────────────────────────────────────
+app.get('/', (req, res) => {
+  res.json({ status: 'Bridge AI Voice Agent running', timestamp: new Date().toISOString() });
+});
+
+app.listen(PORT, () => console.log(`Bridge AI Voice Agent running on port ${PORT}`));          <p><b>Time:</b> ${lead.timestamp}</p>
           <p><b>Source:</b> Phone Call (AI Receptionist)</p>
           <hr/>
           <pre style="font-size:12px;white-space:pre-wrap;background:#fff;padding:12px;border:1px solid #ddd;">${lead.snippet}</pre>
