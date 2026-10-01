@@ -9,174 +9,39 @@ app.use(express.urlencoded({ extended: false }));
 
 const PORT = process.env.PORT || 3000;
 
-// ── System prompts per client ──────────────────────────
+// ── System prompts ─────────────────────────────────────
 const PROMPTS = {
   roofing: {
     name: 'Peak Roofing Co.',
     greeting: "Hi, thanks for calling Peak Roofing. I'm a virtual assistant available 24 hours a day. I can help with storm damage, free inspections, or insurance questions. How can I help you today?",
-    prompt: `You are a friendly professional phone receptionist for Peak Roofing Co., a South Florida roofing company.
-
-Your job is to:
-1. Greet the caller warmly
-2. Find out what they need — storm damage, free inspection, insurance claim, general quote, or other
-3. Collect their FULL NAME and CALLBACK PHONE NUMBER
-4. Get a brief description of their roofing issue or need
-5. Let them know a roofing specialist will call them back shortly
-6. Thank them and end the call professionally
-
-IMPORTANT RULES:
-- Keep responses SHORT — this is a phone call, not a chat. 2-3 sentences max per response.
-- Never quote prices — always say a specialist will provide a free estimate
-- Always mention free no-obligation inspections
-- Be warm and empathetic — storm damage is stressful
-- When you have name and phone number, include [LEAD:collected] at the end of your response
-- After collecting info, wrap up the call warmly
-- NEVER say you are an AI unless directly asked. If asked, say you are a virtual assistant.`
+    prompt: `You are a friendly professional phone receptionist for Peak Roofing Co., a South Florida roofing company. Keep responses SHORT — 2-3 sentences max. Find out what they need, collect their FULL NAME and CALLBACK PHONE NUMBER, and let them know a specialist will call back. When you have name and phone include [LEAD:collected]. Never quote prices. NEVER say you are an AI unless directly asked.`
   },
-
   hvac: {
     name: 'Fire & Ice HVAC',
     greeting: "Hi, thanks for calling Fire and Ice HVAC. I'm a virtual assistant available around the clock. I can help with AC repairs, new systems, or maintenance. What can I help you with today?",
-    prompt: `You are a friendly professional phone receptionist for Fire & Ice HVAC, a South Florida heating and cooling company.
-
-Your job is to:
-1. Find out if it's an emergency (AC out in Florida heat = urgent)
-2. Collect their FULL NAME and CALLBACK PHONE NUMBER
-3. Get their address and describe the issue
-4. For emergencies — assure them a technician will call within the hour
-5. For non-emergencies — schedule a callback within 24 hours
-
-IMPORTANT RULES:
-- Keep responses SHORT — 2-3 sentences max
-- Never quote prices
-- For AC emergencies be extra reassuring and urgent
-- When you have name and phone include [LEAD:collected]
-- After collecting info wrap up warmly
-- NEVER say you are an AI unless directly asked.`
+    prompt: `You are a friendly professional phone receptionist for Fire & Ice HVAC, a South Florida heating and cooling company. Keep responses SHORT — 2-3 sentences max. Find out if it's an emergency, collect FULL NAME and CALLBACK PHONE NUMBER and address. When you have name and phone include [LEAD:collected]. Never quote prices. NEVER say you are an AI unless directly asked.`
   },
-
   wallace: {
     name: 'Wallace Fitness Center',
     greeting: "Hi, thanks for calling Wallace Fitness Center! I'm a virtual assistant — I can help you learn about our programs, answer questions, or get you set up with a free consultation. What can I do for you today?",
-    prompt: `You are a warm, encouraging, and energetic phone receptionist for Wallace Fitness Center, a full-service fitness facility in Delmont, Pennsylvania.
-
-BUSINESS INFO:
-- Address: 100 Center Ice Dr, Delmont, PA 15626
-- Phone: (724) 433-6155
-- Open 24/7 for members
-- Serving Delmont, Greensburg, Murrysville, and Westmoreland County
-
-SERVICES:
-- Personal Training: One-on-one with certified coaches. Custom plan for your goals.
-- Group Training: Coach-led strength and conditioning classes. Great community.
-- Nutrition Coaching: Sustainable habits to support health and fitness.
-- Adapted Personal Training: Safe exercise for people with injuries, disabilities, or health conditions.
-- Silver Sneakers: Classes for older adults. Strength, balance, and mobility.
-- Open Gym: 24/7 app-access. Free weights, machines, cardio, functional training.
-- Free consultation available for anyone interested — no commitment required.
-
-Your job is to:
-1. Find out what the caller's fitness goals are
-2. Match them to the right program
-3. Encourage them with a warm, positive tone — fitness can be intimidating
-4. Collect their FULL NAME and CALLBACK PHONE NUMBER
-5. Book them for a FREE CONSULTATION or have a coach call them back
-6. Thank them warmly and end the call
-
-IMPORTANT RULES:
-- Keep responses SHORT — 2-3 sentences max per response
-- Never quote specific prices — direct to free consultation
-- Be warm, encouraging, and positive — never make anyone feel judged
-- Emphasize the free consultation — no commitment, no pressure
-- When you have name and phone include [LEAD:collected]
-- After collecting info wrap up warmly
-- NEVER say you are an AI unless directly asked.`
+    prompt: `You are a warm, encouraging phone receptionist for Wallace Fitness Center in Delmont, PA. Phone: (724) 433-6155. Services: Personal Training, Group Training, Nutrition Coaching, Adapted Training, Silver Sneakers, Open Gym 24/7. Keep responses SHORT — 2-3 sentences max. Find out their fitness goals, match them to the right program, collect FULL NAME and CALLBACK PHONE NUMBER. Emphasize the free consultation. When you have name and phone include [LEAD:collected]. Never quote prices. NEVER say you are an AI unless directly asked.`
   },
-
   bridgeai: {
     name: 'Bridge AI',
     greeting: "Hi, thanks for calling Bridge AI. I'm a virtual assistant. We build custom AI agents for businesses that capture leads 24/7. How can I help you today?",
-    prompt: `You are a friendly professional phone receptionist for Bridge AI, a company that builds custom AI agents for businesses.
-
-Your job is to:
-1. Find out what kind of business they have and what they're interested in
-2. Explain briefly — we build custom AI agents that capture leads 24/7
-3. Collect their FULL NAME, CALLBACK PHONE NUMBER, and business type
-4. Let them know Mark will call them back personally
-5. Point them to mybridgeai.com to see a live demo while they wait
-
-PRICING if asked:
-- Setup: $500-1,000 depending on complexity
-- Annual maintenance: $1,500/year
-
-IMPORTANT RULES:
-- Keep responses SHORT — 2-3 sentences max
-- Be enthusiastic but not pushy
-- When you have name and phone include [LEAD:collected]
-- After collecting info wrap up warmly
-- NEVER say you are an AI unless directly asked.`
+    prompt: `You are a friendly phone receptionist for Bridge AI, a company that builds custom AI agents for businesses. Keep responses SHORT — 2-3 sentences max. Find out what kind of business they have, collect FULL NAME, CALLBACK PHONE NUMBER, and business type. When you have name and phone include [LEAD:collected]. NEVER say you are an AI unless directly asked.`
   }
 };
 
-// ── Active calls storage ───────────────────────────────
+// ── Storage ────────────────────────────────────────────
 const activeCalls = {};
 const pendingLeads = {};
 const activeTimers = {};
-
-// ── ElevenLabs TTS ────────────────────────────────────
-async function textToSpeech(text, voiceId) {
-  const elevenKey = (process.env.ELEVENLABS_API_KEY || '').trim();
-  
-  // Use ElevenLabs if key is available, otherwise fall back to Polly
-  if (!elevenKey) {
-    return null; // Fall back to Polly
-  }
-
-  // Default voice IDs per client type
-  const voices = {
-    roofing: process.env.VOICE_ROOFING || 'EXAVITQu4vr4xnSDxMaL', // Sarah - professional
-    hvac: process.env.VOICE_HVAC || 'EXAVITQu4vr4xnSDxMaL',
-    wallace: process.env.VOICE_WALLACE || 'XrExE9yKIg1WjnnlVkGX', // Matilda - warm & friendly
-    bridgeai: process.env.VOICE_BRIDGEAI || 'ErXwobaYiN019PkySvjV' // Antoni - confident
-  };
-
-  const vid = voices[voiceId] || voices.bridgeai;
-
-  try {
-    const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${vid}/stream`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'xi-api-key': elevenKey,
-      },
-      body: JSON.stringify({
-        text: text,
-        model_id: 'eleven_turbo_v2',
-        voice_settings: {
-          stability: 0.5,
-          similarity_boost: 0.75,
-          style: 0.3,
-          use_speaker_boost: true
-        }
-      })
-    });
-
-    if (!response.ok) throw new Error('ElevenLabs error: ' + response.status);
-    
-    const buffer = await response.arrayBuffer();
-    const base64 = Buffer.from(buffer).toString('base64');
-    return `data:audio/mpeg;base64,${base64}`;
-  } catch (err) {
-    console.error('ElevenLabs TTS error:', err.message);
-    return null;
-  }
-}
-
-// ── Audio cache for ElevenLabs audio ─────────────────
 const audioCache = {};
 let audioCounter = 0;
 
-async function generateAndCacheAudio(text, client) {
+// ── ElevenLabs TTS ─────────────────────────────────────
+async function generateAudio(text, client) {
   const elevenKey = (process.env.ELEVENLABS_API_KEY || '').trim();
   if (!elevenKey) return null;
 
@@ -202,7 +67,6 @@ async function generateAndCacheAudio(text, client) {
         voice_settings: { stability: 0.5, similarity_boost: 0.75 }
       })
     });
-
     if (!response.ok) throw new Error('ElevenLabs ' + response.status);
     const buffer = Buffer.from(await response.arrayBuffer());
     const id = 'a' + (++audioCounter);
@@ -216,7 +80,7 @@ async function generateAndCacheAudio(text, client) {
 }
 
 async function sayWithVoice(twiml, text, client, host) {
-  const audioId = await generateAndCacheAudio(text, client);
+  const audioId = await generateAudio(text, client);
   if (audioId && host) {
     twiml.play(`https://${host}/audio/${audioId}`);
   } else {
@@ -224,60 +88,7 @@ async function sayWithVoice(twiml, text, client, host) {
   }
 }
 
-// ── Active calls storage ───────────────────────────────
-
-// ── ElevenLabs TTS ────────────────────────────────────
-async function textToSpeech(text, voiceId) {
-  const elevenKey = (process.env.ELEVENLABS_API_KEY || '').trim();
-  
-  // Use ElevenLabs if key is available, otherwise fall back to Polly
-  if (!elevenKey) {
-    return null; // Fall back to Polly
-  }
-
-  // Default voice IDs per client type
-  const voices = {
-    roofing: process.env.VOICE_ROOFING || 'EXAVITQu4vr4xnSDxMaL', // Sarah - professional
-    hvac: process.env.VOICE_HVAC || 'EXAVITQu4vr4xnSDxMaL',
-    wallace: process.env.VOICE_WALLACE || 'XrExE9yKIg1WjnnlVkGX', // Matilda - warm & friendly
-    bridgeai: process.env.VOICE_BRIDGEAI || 'ErXwobaYiN019PkySvjV' // Antoni - confident
-  };
-
-  const vid = voices[voiceId] || voices.bridgeai;
-
-  try {
-    const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${vid}/stream`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'xi-api-key': elevenKey,
-      },
-      body: JSON.stringify({
-        text: text,
-        model_id: 'eleven_turbo_v2',
-        voice_settings: {
-          stability: 0.5,
-          similarity_boost: 0.75,
-          style: 0.3,
-          use_speaker_boost: true
-        }
-      })
-    });
-
-    if (!response.ok) throw new Error('ElevenLabs error: ' + response.status);
-    
-    const buffer = await response.arrayBuffer();
-    const base64 = Buffer.from(buffer).toString('base64');
-    return `data:audio/mpeg;base64,${base64}`;
-  } catch (err) {
-    console.error('ElevenLabs TTS error:', err.message);
-    return null;
-  }
-}
-
-// ── Audio cache ───────────────────────────────────────
-
-// ── Serve cached audio ────────────────────────────────
+// ── Serve audio ────────────────────────────────────────
 app.get('/audio/:id', (req, res) => {
   const buf = audioCache[req.params.id];
   if (!buf) return res.status(404).send('Not found');
@@ -285,9 +96,201 @@ app.get('/audio/:id', (req, res) => {
   res.send(buf);
 });
 
+// ── Inbound call ───────────────────────────────────────
+app.post('/voice/:client', async (req, res) => {
+  const client = req.params.client;
+  const config = PROMPTS[client];
+  const callSid = req.body.CallSid;
+  const host = req.get('host');
+
+  if (!config) {
+    const twiml = new twilio.twiml.VoiceResponse();
+    twiml.say('Sorry, this number is not configured.');
+    return res.type('text/xml').send(twiml.toString());
+  }
+
+  activeCalls[callSid] = { client, history: [] };
+
+  const twiml = new twilio.twiml.VoiceResponse();
+  const gather = twiml.gather({
+    input: 'speech',
+    action: `/voice/${client}/respond`,
+    method: 'POST',
+    speechTimeout: 'auto',
+    speechModel: 'phone_call',
+    enhanced: true,
+    language: 'en-US'
+  });
+
+  await sayWithVoice(gather, config.greeting, client, host);
+  twiml.redirect(`/voice/${client}`);
+
+  res.type('text/xml').send(twiml.toString());
+});
+
+// ── Response handler ───────────────────────────────────
+app.post('/voice/:client/respond', async (req, res) => {
+  const client = req.params.client;
+  const config = PROMPTS[client];
+  const callSid = req.body.CallSid;
+  const speechResult = req.body.SpeechResult || '';
+  const host = req.get('host');
+
+  const call = activeCalls[callSid] || { client, history: [] };
+  activeCalls[callSid] = call;
+  call.history.push({ role: 'user', content: speechResult });
+
+  const twiml = new twilio.twiml.VoiceResponse();
+
+  try {
+    const apiKey = (process.env.ANTHROPIC_API_KEY || '').trim();
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01'
+      },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 256,
+        system: config.prompt,
+        messages: call.history
+      })
+    });
+
+    const data = await response.json();
+    if (data.error) throw new Error(data.error.message);
+
+    let reply = data.content[0].text;
+    const leadCollected = reply.includes('[LEAD:collected]');
+    reply = reply.replace('[LEAD:collected]', '').trim();
+    call.history.push({ role: 'assistant', content: reply });
+
+    if (leadCollected) {
+      const sessionKey = callSid;
+      if (activeTimers[sessionKey]) clearTimeout(activeTimers[sessionKey]);
+      pendingLeads[sessionKey] = { history: [...call.history], client };
+      activeTimers[sessionKey] = setTimeout(() => {
+        if (pendingLeads[sessionKey]) {
+          captureVoiceLead(pendingLeads[sessionKey].history, pendingLeads[sessionKey].client);
+          delete pendingLeads[sessionKey];
+        }
+        delete activeTimers[sessionKey];
+        delete activeCalls[callSid];
+      }, 60 * 1000);
+    }
+
+    const gather = twiml.gather({
+      input: 'speech',
+      action: `/voice/${client}/respond`,
+      method: 'POST',
+      speechTimeout: 'auto',
+      speechModel: 'phone_call',
+      enhanced: true,
+      language: 'en-US'
+    });
+    await sayWithVoice(gather, reply, client, host);
+    await sayWithVoice(twiml, 'Are you still there? Take your time.', client, host);
+
+  } catch (err) {
+    console.error('Response error:', err.message);
+    twiml.say({ voice: 'Polly.Joanna-Neural' }, 'Sorry, I had a technical issue. Please call back shortly. Thank you!');
+  }
+
+  res.type('text/xml').send(twiml.toString());
+});
+
+// ── Missed call SMS ────────────────────────────────────
+app.post('/voice/:client/missed', async (req, res) => {
+  const client = req.params.client;
+  const callerPhone = req.body.From || req.body.Caller;
+
+  const messages = {
+    roofing: `Hi! You called Peak Roofing but we missed you. Our AI can help right now at mybridgeai.com — or we'll call you back shortly!`,
+    hvac: `Hi! You called Fire & Ice HVAC but we missed you. For AC emergencies our AI can help now at mybridgeai.com!`,
+    wallace: `Hi! You called Wallace Fitness but we missed you. Our AI assistant can answer questions and set up your free consultation right now at wallacefitnesscenter.com!`,
+    bridgeai: `Hi! You called Bridge AI but we missed you. Check out a live demo at mybridgeai.com or we'll call you back shortly!`
+  };
+
+  try {
+    const twilioClient = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
+    await twilioClient.messages.create({
+      body: messages[client] || messages.bridgeai,
+      from: process.env.TWILIO_PHONE_NUMBER,
+      to: callerPhone
+    });
+    console.log(`Missed call SMS sent to ${callerPhone}`);
+  } catch (err) {
+    console.error('SMS error:', err.message);
+  }
+
+  res.sendStatus(200);
+});
+
+// ── Lead capture ───────────────────────────────────────
+async function captureVoiceLead(history, client) {
+  const config = PROMPTS[client];
+  const allText = history.map(m => m.content).join('\n');
+  const assistantText = history.filter(m => m.role === 'assistant').map(m => m.content).join('\n');
+
+  let name = 'Not captured';
+  const skipWords = /^(there|you|me|sir|mam|friend|sure|yes|no|ok|well|it|that|this|question|help|hi|hello|hey)$/i;
+  const confirmedName = assistantText.match(/(?:thank you|thanks|great)[,!]?\s+([A-Za-z][a-z]+(?:\s+[A-Za-z][a-z]+)?)[,!\.]/i);
+  if (confirmedName && !skipWords.test(confirmedName[1])) name = confirmedName[1];
+
+  const phoneMatch = allText.match(/\d*?(\(?\d{3}\)?[\s\-.]?\d{3}[\s\-.]?\d{4})/);
+  const phone = phoneMatch ? phoneMatch[1] : 'Not captured';
+
+  let project = 'Voice call inquiry';
+  const userMessages = history.filter(m => m.role === 'user').map(m => m.content);
+  const serviceKeywords = /train|fitness|weight|muscle|lose|gain|workout|gym|nutrition|coach|silver|adapt|injury|health|roof|damage|insurance|inspection|ac|hvac|cool|heat/i;
+  for (const msg of userMessages) {
+    if (serviceKeywords.test(msg) && msg.length > 8) { project = msg.slice(0, 120).trim(); break; }
+  }
+
+  const timestamp = new Date().toLocaleString('en-US', { timeZone: 'America/New_York' });
+  const snippet = history.map(m => `${m.role === 'user' ? (name !== 'Not captured' ? name : 'Caller') : config.name}: ${m.content}`).join('\n\n');
+  const lead = { name, phone, project, timestamp, snippet };
+
+  console.log('Voice lead:', lead.name, lead.phone, lead.project);
+
+  // Email
+  try {
+    const resendKey = (process.env.RESEND_API_KEY || '').trim();
+    const recipients = [process.env.GMAIL_USER, process.env.CLIENT_EMAIL].filter(Boolean);
+    const names = { bridgeai: 'Bridge AI', roofing: 'Peak Roofing Co.', hvac: 'Fire & Ice HVAC', wallace: 'Wallace Fitness Center' };
+    await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + resendKey },
+      body: JSON.stringify({
+        from: 'Bridge AI <leads@mybridgeai.com>',
+        to: recipients,
+        subject: `📞 New Voice Lead — ${names[client] || client}: ${lead.name} | ${lead.phone}`,
+        html: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;"><div style="background:#211F58;padding:20px;border-radius:8px 8px 0 0;"><h2 style="color:#A0A09F;margin:0;">📞 New Voice Lead — ${names[client] || client}</h2></div><div style="background:#f9f9f9;padding:24px;border:1px solid #e0e0e0;"><p><b>Name:</b> ${lead.name}</p><p><b>Phone:</b> <a href="tel:${lead.phone}">${lead.phone}</a></p><p><b>Inquiry:</b> ${lead.project}</p><p><b>Time:</b> ${lead.timestamp}</p><hr/><h3>Conversation</h3><pre style="background:#fff;padding:12px;border:1px solid #ddd;border-radius:4px;font-size:12px;white-space:pre-wrap;">${lead.snippet}</pre></div><div style="background:#211F58;padding:10px 20px;border-radius:0 0 8px 8px;text-align:center;"><p style="color:rgba(160,160,159,0.7);margin:0;font-size:11px;">Powered by Bridge AI</p></div></div>`
+      })
+    });
+    console.log('Email sent');
+  } catch (err) { console.error('Email error:', err.message); }
+
+  // GHL webhook
+  try {
+    const webhookUrls = { wallace: process.env.GHL_WEBHOOK_WALLACE, roofing: process.env.GHL_WEBHOOK_ROOFING, hvac: process.env.GHL_WEBHOOK_HVAC, bridgeai: process.env.GHL_WEBHOOK_BRIDGEAI };
+    const webhookUrl = webhookUrls[client];
+    if (webhookUrl) {
+      await fetch(webhookUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ firstName: lead.name.split(' ')[0], lastName: lead.name.split(' ').slice(1).join(' '), phone: lead.phone, source: 'Voice Call', notes: lead.project, tags: ['Bridge AI', 'Voice Call', client] })
+      });
+      console.log('GHL webhook sent');
+    }
+  } catch (err) { console.error('GHL error:', err.message); }
+}
+
 // ── Health check ───────────────────────────────────────
 app.get('/', (req, res) => {
-  res.json({ status: 'Bridge AI Voice Server running', timestamp: new Date().toISOString(), clients: Object.keys(PROMPTS) });
+  res.json({ status: 'Bridge AI Voice Server running', clients: Object.keys(PROMPTS), timestamp: new Date().toISOString() });
 });
 
 app.listen(PORT, () => console.log(`Voice server running on port ${PORT}`));
