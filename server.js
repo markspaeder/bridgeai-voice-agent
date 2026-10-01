@@ -225,9 +225,6 @@ async function sayWithVoice(twiml, text, client, host) {
 }
 
 // ── Active calls storage ───────────────────────────────
-const activeCalls = {};
-const pendingLeads = {};
-const activeTimers = {};
 
 // ── ElevenLabs TTS ────────────────────────────────────
 async function textToSpeech(text, voiceId) {
@@ -279,8 +276,6 @@ async function textToSpeech(text, voiceId) {
 }
 
 // ── Audio cache ───────────────────────────────────────
-const audioCache = {};
-let audioCounter = 0;
 
 // ── Serve cached audio ────────────────────────────────
 app.get('/audio/:id', (req, res) => {
