@@ -172,317 +172,80 @@ async function textToSpeech(text, voiceId) {
   }
 }
 
-// ── Helper: say with ElevenLabs or Polly fallback ─────
+// ── Helper: say with ElevenLabs voice ────────────────
 function sayWithVoice(twiml, text, client) {
-  // For now use Polly — ElevenLabs requires audio hosting
-  // TODO: Upload audio to S3/CDN and use twiml.play()
-  const voices = {
-    wallace: 'Polly.Joanna-Neural',
-    roofing: 'Polly.Joanna-Neural',
-    hvac: 'Polly.Joanna-Neural',
-    bridgeai: 'Polly.Matthew-Neural'
+  const voiceIds = {
+    wallace: process.env.VOICE_WALLACE || 'aMSt68OGf4xUZAnLpTU8',
+    roofing: process.env.VOICE_ROOFING || 'aMSt68OGf4xUZAnLpTU8',
+    hvac: process.env.VOICE_HVAC || 'aMSt68OGf4xUZAnLpTU8',
+    bridgeai: process.env.VOICE_BRIDGEAI || 'aMSt68OGf4xUZAnLpTU8'
   };
-  const voice = voices[client] || 'Polly.Joanna-Neural';
-  twiml.say({ voice }, text);
+  const elevenKey = (process.env.ELEVENLABS_API_KEY || '').trim();
+  if (elevenKey) {
+    const voiceId = voiceIds[client] || 'aMSt68OGf4xUZAnLpTU8';
+    twiml.say({ voice: `ElevenLabs.${voiceId}` }, text);
+  } else {
+    twiml.say({ voice: 'Polly.Joanna-Neural' }, text);
+  }
 }
 
-// ── Inbound call handler ───────────────────────────────
-app.post('/voice/:client', (req, res) => {
-  const client = req.params.client;
-  const config = PROMPTS[client];
-  const callSid = req.body.CallSid;
+// ── Active calls storage ───────────────────────────────
+const activeCalls = {};
+const pendingLeads = {};
+const activeTimers = {};
 
-  if (!config) {
-    const twiml = new twilio.twiml.VoiceResponse();
-    twiml.say('Sorry, this number is not configured.');
-    return res.type('text/xml').send(twiml.toString());
+// ── ElevenLabs TTS ────────────────────────────────────
+async function textToSpeech(text, voiceId) {
+  const elevenKey = (process.env.ELEVENLABS_API_KEY || '').trim();
+  
+  // Use ElevenLabs if key is available, otherwise fall back to Polly
+  if (!elevenKey) {
+    return null; // Fall back to Polly
   }
 
-  // Initialize call state
-  activeCalls[callSid] = {
-    client,
-    history: [],
-    collected: { name: null, phone: null }
+  // Default voice IDs per client type
+  const voices = {
+    roofing: process.env.VOICE_ROOFING || 'EXAVITQu4vr4xnSDxMaL', // Sarah - professional
+    hvac: process.env.VOICE_HVAC || 'EXAVITQu4vr4xnSDxMaL',
+    wallace: process.env.VOICE_WALLACE || 'XrExE9yKIg1WjnnlVkGX', // Matilda - warm & friendly
+    bridgeai: process.env.VOICE_BRIDGEAI || 'ErXwobaYiN019PkySvjV' // Antoni - confident
   };
 
-  const twiml = new twilio.twiml.VoiceResponse();
-  const gather = twiml.gather({
-    input: 'speech',
-    action: `/voice/${client}/respond`,
-    method: 'POST',
-    speechTimeout: 'auto',
-    speechModel: 'phone_call',
-    enhanced: true,
-    language: 'en-US'
-  });
-
-  sayWithVoice(gather, config.greeting, client);
-  twiml.redirect(`/voice/${client}`);
-
-  res.type('text/xml').send(twiml.toString());
-});
-
-// ── Response handler ───────────────────────────────────
-app.post('/voice/:client/respond', async (req, res) => {
-  const client = req.params.client;
-  const config = PROMPTS[client];
-  const callSid = req.body.CallSid;
-  const speechResult = req.body.SpeechResult || '';
-
-  const call = activeCalls[callSid] || { client, history: [], collected: { name: null, phone: null } };
-  activeCalls[callSid] = call;
-
-  call.history.push({ role: 'user', content: speechResult });
-
-  const twiml = new twilio.twiml.VoiceResponse();
+  const vid = voices[voiceId] || voices.bridgeai;
 
   try {
-    const apiKey = (process.env.ANTHROPIC_API_KEY || '').trim();
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
+    const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${vid}/stream`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01'
+        'xi-api-key': elevenKey,
       },
       body: JSON.stringify({
-        model: 'claude-haiku-4-5-20251001',
-        max_tokens: 256,
-        system: config.prompt,
-        messages: call.history
+        text: text,
+        model_id: 'eleven_turbo_v2',
+        voice_settings: {
+          stability: 0.5,
+          similarity_boost: 0.75,
+          style: 0.3,
+          use_speaker_boost: true
+        }
       })
     });
 
-    const data = await response.json();
-    if (data.error) throw new Error(data.error.message);
-
-    let reply = data.content[0].text;
-    const leadCollected = reply.includes('[LEAD:collected]');
-    reply = reply.replace('[LEAD:collected]', '').trim();
-
-    call.history.push({ role: 'assistant', content: reply });
-
-    if (leadCollected) {
-      // Delayed lead capture — wait for call to end
-      const sessionKey = callSid;
-      if (activeTimers[sessionKey]) clearTimeout(activeTimers[sessionKey]);
-      pendingLeads[sessionKey] = { history: [...call.history], client };
-      activeTimers[sessionKey] = setTimeout(() => {
-        if (pendingLeads[sessionKey]) {
-          captureVoiceLead(pendingLeads[sessionKey].history, pendingLeads[sessionKey].client, callSid);
-          delete pendingLeads[sessionKey];
-        }
-        delete activeTimers[sessionKey];
-        delete activeCalls[callSid];
-      }, 60 * 1000); // 1 min after lead collected
-
-      const gather = twiml.gather({
-        input: 'speech',
-        action: `/voice/${client}/respond`,
-        method: 'POST',
-        speechTimeout: 'auto',
-        speechModel: 'phone_call',
-        enhanced: true,
-        language: 'en-US'
-      });
-      sayWithVoice(gather, reply, client);
-      sayWithVoice(twiml, 'Thank you for calling. Have a great day!', client);
-    } else {
-      const gather = twiml.gather({
-        input: 'speech',
-        action: `/voice/${client}/respond`,
-        method: 'POST',
-        speechTimeout: 'auto',
-        speechModel: 'phone_call',
-        enhanced: true,
-        language: 'en-US'
-      });
-      sayWithVoice(gather, reply, client);
-      sayWithVoice(twiml, 'Are you still there? Take your time.', client);
-    }
-
+    if (!response.ok) throw new Error('ElevenLabs error: ' + response.status);
+    
+    const buffer = await response.arrayBuffer();
+    const base64 = Buffer.from(buffer).toString('base64');
+    return `data:audio/mpeg;base64,${base64}`;
   } catch (err) {
-    console.error('Response error:', err.message);
-    sayWithVoice(twiml, 'Sorry, I had a technical issue. Please call back or visit our website. Thank you!', client);
+    console.error('ElevenLabs TTS error:', err.message);
+    return null;
   }
-
-  res.type('text/xml').send(twiml.toString());
-});
-
-// ── Missed call handler ────────────────────────────────
-app.post('/voice/:client/missed', async (req, res) => {
-  const client = req.params.client;
-  const callerPhone = req.body.From || req.body.Caller;
-  const config = PROMPTS[client];
-
-  if (!callerPhone || !config) return res.sendStatus(200);
-
-  const siteUrls = {
-    roofing: 'mybridgeai.com',
-    hvac: 'mybridgeai.com',
-    wallace: 'wallacefitnesscenter.com',
-    bridgeai: 'mybridgeai.com'
-  };
-
-  const messages = {
-    roofing: `Hi! You called Peak Roofing but we missed you. Our AI assistant can help right now at ${siteUrls[client]} — or we'll call you back shortly!`,
-    hvac: `Hi! You called Fire & Ice HVAC but we missed you. For AC emergencies our AI can help now at ${siteUrls[client]} — or we'll call back soon!`,
-    wallace: `Hi! You called Wallace Fitness Center but we missed you. Our AI assistant can answer questions and set up your free consultation right now at ${siteUrls[client]}!`,
-    bridgeai: `Hi! You called Bridge AI but we missed you. Check out a live demo at mybridgeai.com or we'll call you back shortly!`
-  };
-
-  try {
-    const twilioClient = twilio(
-      process.env.TWILIO_ACCOUNT_SID,
-      process.env.TWILIO_AUTH_TOKEN
-    );
-
-    await twilioClient.messages.create({
-      body: messages[client] || messages.bridgeai,
-      from: process.env.TWILIO_PHONE_NUMBER || '+18662805386',
-      to: callerPhone
-    });
-
-    console.log(`Missed call SMS sent to ${callerPhone} for ${client}`);
-  } catch (err) {
-    console.error('SMS error:', err.message);
-  }
-
-  res.sendStatus(200);
-});
-
-// ── Voice lead capture ─────────────────────────────────
-async function captureVoiceLead(history, client, callSid) {
-  const config = PROMPTS[client];
-  const allText = history.map(m => m.content).join('\n');
-  const assistantText = history.filter(m => m.role === 'assistant').map(m => m.content).join('\n');
-
-  // Extract name
-  let name = 'Not captured';
-  const skipWords = /^(there|you|me|sir|mam|friend|buddy|sure|yes|no|ok|all|so|well|it|that|this|question|help|quote|call|hi|hello|hey)$/i;
-  const confirmedName = assistantText.match(/(?:thank you|thanks|great)[,!]?\s+([A-Za-z][a-z]+(?:\s+[A-Za-z][a-z]+)?)[,!\.]/i);
-  if (confirmedName && !skipWords.test(confirmedName[1])) name = confirmedName[1];
-  if (name === 'Not captured') {
-    const userText = history.filter(m => m.role === 'user').map(m => m.content).join('\n');
-    const explicitName = userText.match(/(?:my name is|i'm|i am|this is|call me)\s+([A-Za-z]+(?:\s+[A-Za-z]+)?)/i);
-    if (explicitName && !skipWords.test(explicitName[1])) name = explicitName[1];
-  }
-
-  // Extract phone
-  const phoneMatch = allText.match(/\d*?((?:\(?\d{3}\)?[\s\-.]?\d{3}[\s\-.]?\d{4}))/);
-  const phone = phoneMatch ? phoneMatch[1] : 'Not captured';
-
-  // Extract project/goal
-  let project = 'Voice call inquiry';
-  const userMessages = history.filter(m => m.role === 'user').map(m => m.content);
-  const serviceKeywords = /train|fitness|weight|muscle|lose|gain|workout|gym|nutrition|coach|silver|adapt|injury|health|class|group|open gym|consultation/i;
-  for (const msg of userMessages) {
-    if (serviceKeywords.test(msg) && msg.length > 8) {
-      project = msg.slice(0, 120).trim();
-      break;
-    }
-  }
-
-  const timestamp = new Date().toLocaleString('en-US', { timeZone: 'America/New_York' });
-  const snippet = history.map(m => `${m.role === 'user' ? (name !== 'Not captured' ? name : 'Caller') : config.name}: ${m.content}`).join('\n\n');
-  const lead = { name, phone, project, timestamp, snippet, source: 'Voice Call' };
-
-  console.log('Voice lead captured:', lead.name, lead.phone, lead.project);
-
-  await sendLeadEmail(lead, client).catch(e => console.error('Email failed:', e.message));
-  await appendSheet(lead, client).catch(e => console.error('Sheet failed:', e.message));
-  await sendToGHL(lead, client).catch(e => console.error('GHL failed:', e.message));
 }
 
-// ── Email ──────────────────────────────────────────────
-async function sendLeadEmail(lead, client) {
-  const resendKey = (process.env.RESEND_API_KEY || '').trim();
-  const names = { bridgeai: 'Bridge AI', roofing: 'Peak Roofing Co.', hvac: 'Fire & Ice HVAC', wallace: 'Wallace Fitness Center' };
-  const clientName = names[client] || client;
-  const recipients = [process.env.GMAIL_USER, process.env.CLIENT_EMAIL].filter(Boolean).map(e => e.trim());
-
-  const sourceIcon = lead.source === 'Voice Call' ? '📞' : '💬';
-
-  const body = `
-    <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;">
-      <div style="background:#211F58;padding:20px;border-radius:8px 8px 0 0;">
-        <h2 style="color:#A0A09F;margin:0;">${sourceIcon} New ${lead.source} Lead — ${clientName}</h2>
-      </div>
-      <div style="background:#f9f9f9;padding:24px;border:1px solid #e0e0e0;">
-        <p><b>Name:</b> ${lead.name}</p>
-        <p><b>Phone:</b> <a href="tel:${lead.phone}">${lead.phone}</a></p>
-        <p><b>Inquiry:</b> ${lead.project}</p>
-        <p><b>Source:</b> ${lead.source}</p>
-        <p><b>Time:</b> ${lead.timestamp}</p>
-        <hr/>
-        <h3>Conversation</h3>
-        <pre style="background:#fff;padding:12px;border:1px solid #ddd;border-radius:4px;font-size:12px;white-space:pre-wrap;">${lead.snippet}</pre>
-      </div>
-      <div style="background:#211F58;padding:10px 20px;border-radius:0 0 8px 8px;text-align:center;">
-        <p style="color:rgba(160,160,159,0.7);margin:0;font-size:11px;">Powered by Bridge AI</p>
-      </div>
-    </div>`;
-
-  await fetch('https://api.resend.com/emails', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + resendKey },
-    body: JSON.stringify({
-      from: 'Bridge AI <leads@mybridgeai.com>',
-      to: recipients,
-      subject: `${sourceIcon} New ${lead.source} Lead — ${clientName}: ${lead.name} | ${lead.phone}`,
-      html: body
-    })
-  });
-  console.log('Email sent to:', recipients.join(', '));
-}
-
-// ── Google Sheets ──────────────────────────────────────
-async function appendSheet(lead, client) {
-  const { google } = require('googleapis');
-  const creds = JSON.parse((process.env.GOOGLE_SERVICE_ACCOUNT || '{}').trim());
-  const auth = new google.auth.GoogleAuth({ credentials: creds, scopes: ['https://www.googleapis.com/auth/spreadsheets'] });
-  const sheets = google.sheets({ version: 'v4', auth });
-  const sheetIds = {
-    bridgeai: process.env.BRIDGEAI_SHEET_ID,
-    wallace: process.env.WALLACE_SHEET_ID || process.env.BRIDGEAI_SHEET_ID,
-    roofing: process.env.BRIDGEAI_SHEET_ID,
-    hvac: process.env.BRIDGEAI_SHEET_ID
-  };
-  await sheets.spreadsheets.values.append({
-    spreadsheetId: (sheetIds[client] || process.env.BRIDGEAI_SHEET_ID).trim(),
-    range: 'Sheet1!A:G',
-    valueInputOption: 'RAW',
-    requestBody: { values: [[lead.timestamp, lead.name, lead.phone, 'N/A', lead.project, lead.source, 'New']] }
-  });
-  console.log('Sheet updated');
-}
-
-// ── GHL Webhook ────────────────────────────────────────
-async function sendToGHL(lead, client) {
-  const webhookUrls = {
-    wallace: process.env.GHL_WEBHOOK_WALLACE,
-    roofing: process.env.GHL_WEBHOOK_ROOFING,
-    hvac: process.env.GHL_WEBHOOK_HVAC,
-    bridgeai: process.env.GHL_WEBHOOK_BRIDGEAI
-  };
-
-  const webhookUrl = webhookUrls[client];
-  if (!webhookUrl) return;
-
-  await fetch(webhookUrl, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      firstName: lead.name.split(' ')[0] || lead.name,
-      lastName: lead.name.split(' ').slice(1).join(' ') || '',
-      phone: lead.phone,
-      source: lead.source,
-      notes: lead.project,
-      tags: ['Bridge AI', lead.source, client]
-    })
-  });
-  console.log('GHL webhook sent for', client);
-}
+// ── Audio cache ───────────────────────────────────────
+const audioCache = {};
+let audioCounter = 0;
 
 // ── Health check ───────────────────────────────────────
 app.get('/', (req, res) => {
