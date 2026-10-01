@@ -14,12 +14,12 @@ const PROMPTS = {
   roofing: {
     name: 'Peak Roofing Co.',
     greeting: "Hi, thanks for calling Peak Roofing. I'm a virtual assistant available 24 hours a day. I can help with storm damage, free inspections, or insurance questions. How can I help you today?",
-    prompt: `You are a friendly professional phone receptionist for Peak Roofing Co., a South Florida roofing company. Keep responses SHORT — 2-3 sentences max. Find out what they need, collect their FULL NAME and CALLBACK PHONE NUMBER, and let them know a specialist will call back. When you have name and phone include [LEAD:collected]. Never quote prices. NEVER say you are an AI unless directly asked.`
+    prompt: `You are a friendly professional phone receptionist for Peak Roofing Co., a South Florida roofing company. Keep responses SHORT — 2-3 sentences max. NEVER use markdown, asterisks, or special formatting — plain speech only. Find out what they need, collect their FULL NAME and CALLBACK PHONE NUMBER, and let them know a specialist will call back. When you have name and phone include [LEAD:collected]. Never quote prices. NEVER say you are an AI unless directly asked.`
   },
   hvac: {
     name: 'Fire & Ice HVAC',
     greeting: "Hi, thanks for calling Fire and Ice HVAC. I'm a virtual assistant available around the clock. I can help with AC repairs, new systems, or maintenance. What can I help you with today?",
-    prompt: `You are a friendly professional phone receptionist for Fire & Ice HVAC, a South Florida heating and cooling company. Keep responses SHORT — 2-3 sentences max. Find out if it's an emergency, collect FULL NAME and CALLBACK PHONE NUMBER and address. When you have name and phone include [LEAD:collected]. Never quote prices. NEVER say you are an AI unless directly asked.`
+    prompt: `You are a friendly professional phone receptionist for Fire & Ice HVAC, a South Florida heating and cooling company. Keep responses SHORT — 2-3 sentences max. NEVER use markdown, asterisks, or special formatting — plain speech only. Find out if it's an emergency, collect FULL NAME and CALLBACK PHONE NUMBER and address. When you have name and phone include [LEAD:collected]. Never quote prices. NEVER say you are an AI unless directly asked.`
   },
   wallace: {
     name: 'Wallace Fitness Center',
@@ -29,7 +29,7 @@ const PROMPTS = {
   bridgeai: {
     name: 'Bridge AI',
     greeting: "Hi, thanks for calling Bridge AI. I'm a virtual assistant. We build custom AI agents for businesses that capture leads 24/7. How can I help you today?",
-    prompt: `You are a friendly phone receptionist for Bridge AI, a company that builds custom AI agents for businesses. Keep responses SHORT — 2-3 sentences max. Find out what kind of business they have, collect FULL NAME, CALLBACK PHONE NUMBER, and business type. When you have name and phone include [LEAD:collected]. NEVER say you are an AI unless directly asked.`
+    prompt: `You are a friendly phone receptionist for Bridge AI, a company that builds custom AI agents for businesses. Keep responses SHORT — 2-3 sentences max. NEVER use markdown, asterisks, or special formatting — plain speech only. Find out what kind of business they have, collect FULL NAME, CALLBACK PHONE NUMBER, and business type. When you have name and phone include [LEAD:collected]. NEVER say you are an AI unless directly asked.`
   }
 };
 
@@ -64,7 +64,7 @@ async function generateAudio(text, client) {
       body: JSON.stringify({
         text,
         model_id: 'eleven_turbo_v2',
-        voice_settings: { stability: 0.5, similarity_boost: 0.75 }
+        voice_settings: { stability: 0.35, similarity_boost: 0.85, style: 0.4, use_speaker_boost: true }
       })
     });
     if (!response.ok) throw new Error('ElevenLabs ' + response.status);
@@ -165,6 +165,8 @@ app.post('/voice/:client/respond', async (req, res) => {
     let reply = data.content[0].text;
     const leadCollected = reply.includes('[LEAD:collected]');
     reply = reply.replace('[LEAD:collected]', '').trim();
+    // Strip markdown for voice
+    reply = reply.replace(/\*\*(.+?)\*\*/g, '$1').replace(/\*(.+?)\*/g, '$1').replace(/#{1,6}\s/g, '').replace(/\n+/g, ' ').trim();
     call.history.push({ role: 'assistant', content: reply });
 
     if (leadCollected) {
