@@ -46,7 +46,7 @@ async function generateAudio(text, client) {
   if (!elevenKey) return null;
 
   const voiceIds = {
-    wallace: process.env.VOICE_WALLACE || 'aMSt68OGf4xUZAnLpTU8',
+    wallace: process.env.VOICE_WALLACE || '9BWtsMINqrJLrRacOk9x',
     roofing: process.env.VOICE_ROOFING || 'aMSt68OGf4xUZAnLpTU8',
     hvac: process.env.VOICE_HVAC || 'aMSt68OGf4xUZAnLpTU8',
     bridgeai: process.env.VOICE_BRIDGEAI || 'aMSt68OGf4xUZAnLpTU8'
@@ -64,7 +64,7 @@ async function generateAudio(text, client) {
       body: JSON.stringify({
         text,
         model_id: 'eleven_turbo_v2',
-        voice_settings: { stability: 0.35, similarity_boost: 0.85, style: 0.4, use_speaker_boost: true }
+        voice_settings: { stability: 0.2, similarity_boost: 0.9, style: 0.6, use_speaker_boost: true }
       })
     });
     if (!response.ok) throw new Error('ElevenLabs ' + response.status);
@@ -116,10 +116,11 @@ app.post('/voice/:client', async (req, res) => {
     input: 'speech',
     action: `/voice/${client}/respond`,
     method: 'POST',
-    speechTimeout: 'auto',
+    speechTimeout: '1',
     speechModel: 'phone_call',
     enhanced: true,
-    language: 'en-US'
+    language: 'en-US',
+    actionOnEmptyResult: true
   });
 
   await sayWithVoice(gather, config.greeting, client, host);
@@ -187,13 +188,13 @@ app.post('/voice/:client/respond', async (req, res) => {
       input: 'speech',
       action: `/voice/${client}/respond`,
       method: 'POST',
-      speechTimeout: 'auto',
+      speechTimeout: '1',
       speechModel: 'phone_call',
       enhanced: true,
-      language: 'en-US'
+      language: 'en-US',
+      actionOnEmptyResult: true
     });
     await sayWithVoice(gather, reply, client, host);
-    await sayWithVoice(twiml, 'Are you still there? Take your time.', client, host);
 
   } catch (err) {
     console.error('Response error:', err.message);
