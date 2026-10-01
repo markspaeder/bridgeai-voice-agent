@@ -17,9 +17,9 @@ const PROMPTS = {
     prompt: `You are a friendly professional phone receptionist for Peak Roofing Co., a South Florida roofing company. Keep responses SHORT — 2-3 sentences max. NEVER use markdown, asterisks, or special formatting — plain speech only. Find out what they need, collect their FULL NAME and CALLBACK PHONE NUMBER, and let them know a specialist will call back. When you have name and phone include [LEAD:collected]. Never quote prices. NEVER say you are an AI unless directly asked.`
   },
   hvac: {
-    name: 'Fire & Ice HVAC',
-    greeting: "Hi, thanks for calling Fire and Ice HVAC. I'm a virtual assistant available around the clock. I can help with AC repairs, new systems, or maintenance. What can I help you with today?",
-    prompt: `You are a friendly professional phone receptionist for Fire & Ice HVAC, a South Florida heating and cooling company. Keep responses SHORT — 2-3 sentences max. NEVER use markdown, asterisks, or special formatting — plain speech only. Find out if it's an emergency, collect FULL NAME and CALLBACK PHONE NUMBER and address. When you have name and phone include [LEAD:collected]. Never quote prices. NEVER say you are an AI unless directly asked.`
+    name: 'Fire and Ice Heating and Air',
+    greeting: "Hi, thanks for calling Fire and Ice Heating and Air! I'm a virtual assistant available around the clock. Whether it's AC, heating, or a plumbing issue — I'm here to help. What can I do for you today?",
+    prompt: `You are a warm professional phone receptionist for Fire and Ice Heating and Air, a five-star HVAC company in Greensburg Pennsylvania since 1999. Phone: (724) 240-3888. Services: AC repair, replacement and maintenance, furnace repair and replacement, mini-splits, indoor air quality, plumbing and water heaters. Emergency service available around the clock. Comfort Club maintenance membership available. Keep responses SHORT — 2-3 sentences max. NEVER use markdown, asterisks, or special formatting — plain speech only. For emergencies be extra reassuring and tell them help is on the way. Collect FULL NAME and CALLBACK PHONE NUMBER. Tell them a technician will call back shortly. When you have name and phone include [LEAD:collected]. Never quote prices. NEVER say you are an AI unless directly asked.`
   },
   wallace: {
     name: 'Wallace Fitness Center',
@@ -212,7 +212,7 @@ app.post('/voice/:client/missed', async (req, res) => {
 
   const messages = {
     roofing: `Hi! You called Peak Roofing but we missed you. Our AI can help right now at mybridgeai.com — or we'll call you back shortly!`,
-    hvac: `Hi! You called Fire & Ice HVAC but we missed you. For AC emergencies our AI can help now at mybridgeai.com!`,
+    hvac: `Hi! You called Fire and Ice Heating and Air but we missed you. For AC or heating emergencies our AI can help now at mybridgeai.com — or we will call you right back!`,
     wallace: `Hi! You called Wallace Fitness but we missed you. Our AI assistant can answer questions and set up your free consultation right now at wallacefitnesscenter.com!`,
     bridgeai: `Hi! You called Bridge AI but we missed you. Check out a live demo at mybridgeai.com or we'll call you back shortly!`
   };
@@ -263,7 +263,7 @@ async function captureVoiceLead(history, client) {
   try {
     const resendKey = (process.env.RESEND_API_KEY || '').trim();
     const recipients = [process.env.GMAIL_USER, process.env.CLIENT_EMAIL].filter(Boolean);
-    const names = { bridgeai: 'Bridge AI', roofing: 'Peak Roofing Co.', hvac: 'Fire & Ice HVAC', wallace: 'Wallace Fitness Center' };
+    const names = { bridgeai: 'Bridge AI', roofing: 'Peak Roofing Co.', hvac: 'Fire and Ice Heating and Air', wallace: 'Wallace Fitness Center' };
     await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + resendKey },
