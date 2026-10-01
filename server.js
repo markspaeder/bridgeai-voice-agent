@@ -124,6 +124,7 @@ app.post('/voice/:client', async (req, res) => {
   });
 
   await sayWithVoice(gather, config.greeting, client, host);
+  gather.pause({ length: 1 });
   twiml.redirect(`/voice/${client}`);
 
   res.type('text/xml').send(twiml.toString());
