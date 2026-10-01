@@ -24,11 +24,11 @@ const PROMPTS = {
   wallace: {
     name: 'Wallace Fitness Center',
     greeting: "Hi, thanks for calling Wallace Fitness Center! I'm a virtual assistant — I can help you learn about our programs, answer questions, or get you set up with a free consultation. What can I do for you today?",
-    prompt: `You are a warm, encouraging phone receptionist for Wallace Fitness Center in Delmont, PA. Phone: (724) 433-6155. Services: Personal Training, Group Training, Nutrition Coaching, Adapted Training, Silver Sneakers, Open Gym 24/7. Keep responses SHORT — 2-3 sentences max. Find out their fitness goals, match them to the right program, collect FULL NAME and CALLBACK PHONE NUMBER. Emphasize the free consultation. When you have name and phone include [LEAD:collected]. Never quote prices. NEVER say you are an AI unless directly asked.`
+    prompt: `You are a warm, encouraging phone receptionist for Wallace Fitness Center in Delmont, PA. Phone: (724) 433-6155. Services: Personal Training, Group Training, Nutrition Coaching, Adapted Training, Silver Sneakers, Open Gym twenty-four seven. Keep responses SHORT — 2-3 sentences max. Find out their fitness goals, match them to the right program, collect FULL NAME and CALLBACK PHONE NUMBER. Emphasize the free consultation. When you have name and phone include [LEAD:collected]. Never quote prices. NEVER say you are an AI unless directly asked.`
   },
   bridgeai: {
     name: 'Bridge AI',
-    greeting: "Hi, thanks for calling Bridge AI. I'm a virtual assistant. We build custom AI agents for businesses that capture leads 24/7. How can I help you today?",
+    greeting: "Hi, thanks for calling Bridge AI. I'm a virtual assistant. We build custom AI agents for businesses that capture leads twenty-four seven. How can I help you today?",
     prompt: `You are a friendly phone receptionist for Bridge AI, a company that builds custom AI agents for businesses. Keep responses SHORT — 2-3 sentences max. NEVER use markdown, asterisks, or special formatting — plain speech only. Find out what kind of business they have, collect FULL NAME, CALLBACK PHONE NUMBER, and business type. When you have name and phone include [LEAD:collected]. NEVER say you are an AI unless directly asked.`
   }
 };
@@ -124,7 +124,7 @@ app.post('/voice/:client', async (req, res) => {
   });
 
   await sayWithVoice(gather, config.greeting, client, host);
-  gather.pause({ length: 0 });
+  gather.pause({ length: 1 });
   twiml.redirect(`/voice/${client}`);
 
   res.type('text/xml').send(twiml.toString());
@@ -168,7 +168,7 @@ app.post('/voice/:client/respond', async (req, res) => {
     const leadCollected = reply.includes('[LEAD:collected]');
     reply = reply.replace('[LEAD:collected]', '').trim();
     // Strip markdown for voice
-    reply = reply.replace(/\*\*(.+?)\*\*/g, '$1').replace(/\*(.+?)\*/g, '$1').replace(/#{1,6}\s/g, '').replace(/\n+/g, ' ').trim();
+    reply = reply.replace(/\*\*(.+?)\*\*/g, '$1').replace(/\*(.+?)\*/g, '$1').replace(/#{1,6}\s/g, '').replace(/\n+/g, ' ').replace(/24\/7/g, 'twenty-four seven').replace(/24\s*\/\s*7/g, 'twenty-four seven').trim();
     call.history.push({ role: 'assistant', content: reply });
 
     if (leadCollected) {
