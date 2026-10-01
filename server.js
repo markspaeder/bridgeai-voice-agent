@@ -172,18 +172,53 @@ async function textToSpeech(text, voiceId) {
   }
 }
 
-// ── Helper: say with ElevenLabs voice ────────────────
-function sayWithVoice(twiml, text, client) {
+// ── Audio cache for ElevenLabs audio ─────────────────
+const audioCache = {};
+let audioCounter = 0;
+
+async function generateAndCacheAudio(text, client) {
+  const elevenKey = (process.env.ELEVENLABS_API_KEY || '').trim();
+  if (!elevenKey) return null;
+
   const voiceIds = {
     wallace: process.env.VOICE_WALLACE || 'aMSt68OGf4xUZAnLpTU8',
     roofing: process.env.VOICE_ROOFING || 'aMSt68OGf4xUZAnLpTU8',
     hvac: process.env.VOICE_HVAC || 'aMSt68OGf4xUZAnLpTU8',
     bridgeai: process.env.VOICE_BRIDGEAI || 'aMSt68OGf4xUZAnLpTU8'
   };
-  const elevenKey = (process.env.ELEVENLABS_API_KEY || '').trim();
-  if (elevenKey) {
-    const voiceId = voiceIds[client] || 'aMSt68OGf4xUZAnLpTU8';
-    twiml.say({ voice: `ElevenLabs.${voiceId}` }, text);
+  const voiceId = voiceIds[client] || 'aMSt68OGf4xUZAnLpTU8';
+
+  try {
+    const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'xi-api-key': elevenKey,
+        'Accept': 'audio/mpeg'
+      },
+      body: JSON.stringify({
+        text,
+        model_id: 'eleven_turbo_v2',
+        voice_settings: { stability: 0.5, similarity_boost: 0.75 }
+      })
+    });
+
+    if (!response.ok) throw new Error('ElevenLabs ' + response.status);
+    const buffer = Buffer.from(await response.arrayBuffer());
+    const id = 'a' + (++audioCounter);
+    audioCache[id] = buffer;
+    setTimeout(() => delete audioCache[id], 10 * 60 * 1000);
+    return id;
+  } catch (err) {
+    console.error('ElevenLabs error:', err.message);
+    return null;
+  }
+}
+
+async function sayWithVoice(twiml, text, client, host) {
+  const audioId = await generateAndCacheAudio(text, client);
+  if (audioId && host) {
+    twiml.play(`https://${host}/audio/${audioId}`);
   } else {
     twiml.say({ voice: 'Polly.Joanna-Neural' }, text);
   }
@@ -246,6 +281,14 @@ async function textToSpeech(text, voiceId) {
 // ── Audio cache ───────────────────────────────────────
 const audioCache = {};
 let audioCounter = 0;
+
+// ── Serve cached audio ────────────────────────────────
+app.get('/audio/:id', (req, res) => {
+  const buf = audioCache[req.params.id];
+  if (!buf) return res.status(404).send('Not found');
+  res.set('Content-Type', 'audio/mpeg');
+  res.send(buf);
+});
 
 // ── Health check ───────────────────────────────────────
 app.get('/', (req, res) => {
