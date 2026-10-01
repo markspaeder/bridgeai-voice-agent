@@ -168,7 +168,7 @@ app.post('/voice/:client/respond', async (req, res) => {
     const leadCollected = reply.includes('[LEAD:collected]');
     reply = reply.replace('[LEAD:collected]', '').trim();
     // Strip markdown for voice
-    reply = reply.replace(/\*\*(.+?)\*\*/g, '$1').replace(/\*(.+?)\*/g, '$1').replace(/#{1,6}\s/g, '').replace(/\n+/g, ' ').replace(/24\/7/g, 'twenty-four seven').replace(/24\s*\/\s*7/g, 'twenty-four seven').trim();
+    reply = reply.replace(/^(hi there!?|hello!?|hey!?|hi!?)\s*/i, '').replace(/\*\*(.+?)\*\*/g, '$1').replace(/\*(.+?)\*/g, '$1').replace(/#{1,6}\s/g, '').replace(/\n+/g, ' ').replace(/24\/7/g, 'twenty-four seven').replace(/24\s*\/\s*7/g, 'twenty-four seven').trim();
     call.history.push({ role: 'assistant', content: reply });
 
     if (leadCollected) {
