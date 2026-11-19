@@ -255,6 +255,31 @@ app.post('/voice/:client/missed', async (req, res) => {
   res.sendStatus(200);
 });
 
+// ── AI lead extraction (reads the whole conversation) ──
+async function extractLeadAI(messages) {
+  try {
+    const apiKey = (process.env.ANTHROPIC_API_KEY || '').trim();
+    const convo = messages.map(m => `${m.role === 'user' ? 'CUSTOMER' : 'AGENT'}: ${m.content}`).join('\n');
+    const r = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 300,
+        system: 'Extract the CUSTOMER\'s contact details from this conversation. Use only what the customer actually provided. Return ONLY a JSON object: {"name": string|null, "phone": string|null, "email": string|null, "need": string|null}. "name" is the customer\'s own full name, never a word like question or help. "need" is a one-sentence summary of what they want.',
+        messages: [{ role: 'user', content: convo }]
+      })
+    });
+    const data = await r.json();
+    const txt = (data.content && data.content[0] && data.content[0].text) || '';
+    const json = JSON.parse(txt.slice(txt.indexOf('{'), txt.lastIndexOf('}') + 1));
+    return json;
+  } catch (e) {
+    console.error('AI extraction failed:', e.message);
+    return null;
+  }
+}
+
 // ── Lead capture ───────────────────────────────────────
 async function captureVoiceLead(history, client) {
   const config = PROMPTS[client];
@@ -267,7 +292,7 @@ async function captureVoiceLead(history, client) {
   if (confirmedName && !skipWords.test(confirmedName[1])) name = confirmedName[1];
 
   const phoneMatch = allText.match(/\d*?(\(?\d{3}\)?[\s\-.]?\d{3}[\s\-.]?\d{4})/);
-  const phone = phoneMatch ? phoneMatch[1] : 'Not captured';
+  let phone = phoneMatch ? phoneMatch[1] : 'Not captured';
 
   let project = 'Voice call inquiry';
   const userMessages = history.filter(m => m.role === 'user').map(m => m.content);
@@ -276,6 +301,12 @@ async function captureVoiceLead(history, client) {
     if (serviceKeywords.test(msg) && msg.length > 8) { project = msg.slice(0, 120).trim(); break; }
   }
 
+  const ai = await extractLeadAI(history);
+  if (ai) {
+    if (ai.name) name = ai.name;
+    if (ai.phone) phone = ai.phone;
+    if (ai.need) project = ai.need;
+  }
   const timestamp = new Date().toLocaleString('en-US', { timeZone: 'America/New_York' });
   const snippet = history.map(m => `${m.role === 'user' ? (name !== 'Not captured' ? name : 'Caller') : config.name}: ${m.content}`).join('\n\n');
   const lead = { name, phone, project, timestamp, snippet };
