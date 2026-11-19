@@ -26,6 +26,27 @@ const PROMPTS = {
     greeting: "Hi, thanks for calling Wallace Fitness Center! I'm a virtual assistant — I can help you learn about our programs, answer questions, or get you set up with a free consultation. What can I do for you today?",
     prompt: `You are a warm, encouraging phone receptionist for Wallace Fitness Center in Delmont, PA. Phone: (724) 433-6155. Services: Personal Training, Group Training, Nutrition Coaching, Adapted Training, Silver Sneakers, Open Gym twenty-four seven. Keep responses SHORT — 2-3 sentences max. Find out their fitness goals, match them to the right program, collect FULL NAME and CALLBACK PHONE NUMBER. Emphasize the free consultation. When you have collected name and phone, tell them Alex will call them back personally. When you have name and phone include [LEAD:collected]. Never quote prices. NEVER say you are an AI unless directly asked.`
   },
+  healthfreedom: {
+    name: 'Health Freedom',
+    greeting: "Thanks for calling Health Freedom! Our office is closed right now, but I can help. Are you a current member, or looking into a membership?",
+    prompt: `You are the after-hours phone receptionist for Health Freedom, a nationwide healthcare membership program from American Freedom Health. Mission: low-cost everyday care, no middlemen, no surprise bills.
+
+Health Freedom is NOT insurance. It complements major medical coverage. Say so whenever insurance, coverage, deductibles, hospital stays or surgery come up.
+
+PLANS, per month for a single person: Essential is twenty-four ninety-five. It includes virtual primary and urgent care around the clock, TeleCounseling, and care navigation with the Hospital Bill Eliminator. Premier is forty-nine ninety-five. It adds twelve hundred plus lab tests with no access fee, and in-person urgent care at seven thousand locations, up to six visits a year. Ultimate is sixty-nine ninety-five. It adds unlimited labs and over a thousand generic prescriptions at sixty-eight thousand pharmacies. Single plus one and Family plans exist, but you don't have those prices, so offer a callback.
+
+FIRST, find out whether the caller is a member or a prospect.
+
+PROSPECTS: learn their situation, such as no insurance, a high deductible, a surprise bill, medical debt, prescriptions or labs. Recommend a plan. Collect FULL NAME, CALLBACK PHONE NUMBER and the plan they're interested in. Tell them someone from Health Freedom will call them back the next business day.
+
+MEMBERS: if they need care now, remind them virtual care is available around the clock through their member portal. For account, billing or bill-help questions, collect their FULL NAME, CALLBACK PHONE NUMBER and a short reason, and tell them the member team will call them back the next business day.
+
+When you have name and phone include [LEAD:collected].
+
+EMERGENCIES: for chest pain, trouble breathing, stroke signs, severe bleeding or any emergency, tell them to hang up and call 911 now. For thoughts of self-harm, tell them to call or text 988.
+
+NEVER give medical advice, diagnose, or recommend treatments or doses. Never promise specific savings or that a specific drug is covered. Don't invent details you weren't given. Keep responses SHORT, 2 sentences max. Plain speech only, no markdown or asterisks. Never tell them to call back. Always say someone will call THEM. NEVER say you are an AI unless directly asked.`
+  },
   bridgeai: {
     name: 'Bridge AI',
     greeting: "Thanks for calling Bridge AI! Mark's tied up right now, but I can help. Are you looking into an AI agent for your business?",
@@ -49,7 +70,8 @@ async function generateAudio(text, client) {
     wallace: process.env.VOICE_WALLACE || '9BWtsMINqrJLrRacOk9x',
     roofing: process.env.VOICE_ROOFING || 'aMSt68OGf4xUZAnLpTU8',
     hvac: process.env.VOICE_HVAC || 'aMSt68OGf4xUZAnLpTU8',
-    bridgeai: process.env.VOICE_BRIDGEAI || 'aMSt68OGf4xUZAnLpTU8'
+    bridgeai: process.env.VOICE_BRIDGEAI || 'aMSt68OGf4xUZAnLpTU8',
+    healthfreedom: process.env.VOICE_HEALTHFREEDOM || 'aMSt68OGf4xUZAnLpTU8'
   };
   const voiceId = voiceIds[client] || 'aMSt68OGf4xUZAnLpTU8';
 
@@ -214,6 +236,7 @@ app.post('/voice/:client/missed', async (req, res) => {
     roofing: `Hi! You called Peak Roofing but we missed you. Our AI can help right now at mybridgeai.com — or we'll call you back shortly!`,
     hvac: `Hi! You called Fire and Ice Heating and Air but we missed you. For AC or heating emergencies our AI can help now at mybridgeai.com — or we will call you right back!`,
     wallace: `Hi! You called Wallace Fitness but we missed you. Our AI assistant can answer questions and set up your free consultation right now at wallacefitnesscenter.com!`,
+    healthfreedom: `Hi! You called Health Freedom after hours. Someone will call you back next business day. Members can reach virtual care 24/7 through the member portal.`,
     bridgeai: `Hi! You called Bridge AI but we missed you. Mark will call you back shortly. Meanwhile, try a live demo at mybridgeai.com!`
   };
 
@@ -248,7 +271,7 @@ async function captureVoiceLead(history, client) {
 
   let project = 'Voice call inquiry';
   const userMessages = history.filter(m => m.role === 'user').map(m => m.content);
-  const serviceKeywords = /train|fitness|weight|muscle|lose|gain|workout|gym|nutrition|coach|silver|adapt|injury|health|roof|damage|insurance|inspection|ac|hvac|cool|heat/i;
+  const serviceKeywords = /train|fitness|weight|muscle|lose|gain|workout|gym|nutrition|coach|silver|adapt|injury|health|roof|damage|insurance|inspection|ac|hvac|cool|heat|member|bill|plan|prescription|medication|insurance|lab|doctor|care/i;
   for (const msg of userMessages) {
     if (serviceKeywords.test(msg) && msg.length > 8) { project = msg.slice(0, 120).trim(); break; }
   }
@@ -263,7 +286,7 @@ async function captureVoiceLead(history, client) {
   try {
     const resendKey = (process.env.RESEND_API_KEY || '').trim();
     const recipients = [process.env.GMAIL_USER, process.env.CLIENT_EMAIL].filter(Boolean);
-    const names = { bridgeai: 'Bridge AI', roofing: 'Peak Roofing Co.', hvac: 'Fire and Ice Heating and Air', wallace: 'Wallace Fitness Center' };
+    const names = { bridgeai: 'Bridge AI', roofing: 'Peak Roofing Co.', hvac: 'Fire and Ice Heating and Air', wallace: 'Wallace Fitness Center', healthfreedom: 'Health Freedom' };
     await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + resendKey },
@@ -279,7 +302,7 @@ async function captureVoiceLead(history, client) {
 
   // GHL webhook
   try {
-    const webhookUrls = { wallace: process.env.GHL_WEBHOOK_WALLACE, roofing: process.env.GHL_WEBHOOK_ROOFING, hvac: process.env.GHL_WEBHOOK_HVAC, bridgeai: process.env.GHL_WEBHOOK_BRIDGEAI };
+    const webhookUrls = { wallace: process.env.GHL_WEBHOOK_WALLACE, roofing: process.env.GHL_WEBHOOK_ROOFING, hvac: process.env.GHL_WEBHOOK_HVAC, bridgeai: process.env.GHL_WEBHOOK_BRIDGEAI, healthfreedom: process.env.GHL_WEBHOOK_HEALTHFREEDOM };
     const webhookUrl = webhookUrls[client];
     if (webhookUrl) {
       await fetch(webhookUrl, {
