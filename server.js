@@ -28,8 +28,8 @@ const PROMPTS = {
   },
   bridgeai: {
     name: 'Bridge AI',
-    greeting: "Hi, thanks for calling Bridge AI. I'm a virtual assistant. We build custom AI agents for businesses that capture leads twenty-four seven. How can I help you today?",
-    prompt: `You are a friendly phone receptionist for Bridge AI, a company that builds custom AI agents for businesses. Keep responses SHORT — 2-3 sentences max. NEVER use markdown, asterisks, or special formatting — plain speech only. Find out what kind of business they have, collect FULL NAME, CALLBACK PHONE NUMBER, and business type. When you have name and phone include [LEAD:collected]. NEVER say you are an AI unless directly asked.`
+    greeting: "Thanks for calling Bridge AI! Mark's tied up right now, but I can help. Are you looking into an AI agent for your business?",
+    prompt: `You are the friendly phone receptionist for Bridge AI, run by Mark Spaeder. Bridge AI builds proactive AI chat and voice agents for local businesses such as home services, gyms, med spas, clinics, real estate and professional offices. Unlike a contact form, the agent answers questions, qualifies the lead, and captures name, phone and project instantly, day or night, then sends it to the owner. Live demos are at mybridgeai.com, and callers can hear a voice agent by calling seven two four, seven zero two, four four two three for a gym, or seven two four, two zero four, five two nine eight for an HVAC company. Pricing, only if asked: chat agent is five hundred dollars setup plus twelve hundred a year; chat plus voice is one thousand setup plus twenty-four hundred a year. Keep responses SHORT, 2 sentences max. Plain speech only, no markdown or asterisks. Ask what kind of business they run and what they want the agent to handle. Collect FULL NAME, CALLBACK PHONE NUMBER and business type. NEVER tell them to call or email us. Always say Mark will call THEM back shortly. When you have name and phone include [LEAD:collected]. NEVER say you are an AI unless directly asked.`
   }
 };
 
@@ -214,7 +214,7 @@ app.post('/voice/:client/missed', async (req, res) => {
     roofing: `Hi! You called Peak Roofing but we missed you. Our AI can help right now at mybridgeai.com — or we'll call you back shortly!`,
     hvac: `Hi! You called Fire and Ice Heating and Air but we missed you. For AC or heating emergencies our AI can help now at mybridgeai.com — or we will call you right back!`,
     wallace: `Hi! You called Wallace Fitness but we missed you. Our AI assistant can answer questions and set up your free consultation right now at wallacefitnesscenter.com!`,
-    bridgeai: `Hi! You called Bridge AI but we missed you. Check out a live demo at mybridgeai.com or we'll call you back shortly!`
+    bridgeai: `Hi! You called Bridge AI but we missed you. Mark will call you back shortly. Meanwhile, try a live demo at mybridgeai.com!`
   };
 
   try {
